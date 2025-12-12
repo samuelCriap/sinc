@@ -1,0 +1,239 @@
+﻿============================================================
+AN┴LISE DETALHADA - COLUNA 51 (VALOR[2][51])
+============================================================
+
+Colunas totais certo: 244
+Colunas totais errado: 244
+
+--- Coluna 51 (AY) ---
+
+CABEÃALHO (linha 1):
+  Certo:  NOME 3
+  Errado: NOME 3
+
+C╔LULA B2 (linha 2, coluna 51 = VALOR[2][51]):
+  Certo:
+    Valor: 'Baterias sÒo necessßrias?'
+    Tipo Python: str
+    N·mero formato: General
+
+  Errado:
+    Valor: 'Baterias sÒo necessßrias?'
+    Tipo Python: str
+    N·mero formato: General
+
+============================================================
+TODAS AS COLUNAS COM 'VALOR' NO NOME
+============================================================
+
+Col 39 - VALOR VARIAÃ├O 1:
+  Certo:  'Lilßs' | tipo: str | fmt: General
+  Errado: 'Lilßs' | tipo: str | fmt: General
+
+Col 41 - VALOR VARIAÃ├O 2:
+  Certo:  '34' | tipo: str | fmt: General
+  Errado: 34 | tipo: int | fmt: General
+
+Col 43 - VALOR VARIAÃ├O 3:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 48 - VALOR 1:
+  Certo:  '0' | tipo: str | fmt: General
+  Errado: 0 | tipo: int | fmt: General
+
+Col 50 - VALOR 2:
+  Certo:  'water_resistant' | tipo: str | fmt: General
+  Errado: 'water_resistant' | tipo: str | fmt: General
+
+Col 52 - VALOR 3:
+  Certo:  'false' | tipo: str | fmt: General
+  Errado: False | tipo: bool | fmt: General
+
+Col 54 - VALOR 4:
+  Certo:  'Tenis de corrida' | tipo: str | fmt: General
+  Errado: 'Tenis de corrida' | tipo: str | fmt: General
+
+Col 56 - VALOR 5:
+  Certo:  'Cadarþo' | tipo: str | fmt: General
+  Errado: 'Cadarþo' | tipo: str | fmt: General
+
+Col 58 - VALOR 6:
+  Certo:  'Indicado Para: Corrida, Caminhada, Trei | tipo: str | fmt: General
+  Errado: 'Indicado Para: Corrida, Caminhada, Trei | tipo: str | fmt: General
+
+Col 60 - VALOR 7:
+  Certo:  'TÛnis' | tipo: str | fmt: General
+  Errado: 'TÛnis' | tipo: str | fmt: General
+
+Col 62 - VALOR 8:
+  Certo:  'female' | tipo: str | fmt: General
+  Errado: 'female' | tipo: str | fmt: General
+
+Col 64 - VALOR 9:
+  Certo:  'Adulto' | tipo: str | fmt: General
+  Errado: 'Adulto' | tipo: str | fmt: General
+
+Col 66 - VALOR 10:
+  Certo:  'Cano baixo' | tipo: str | fmt: General
+  Errado: 'Cano baixo' | tipo: str | fmt: General
+
+Col 68 - VALOR 11:
+  Certo:  'TÛnis com amorecimento para proporciona | tipo: str | fmt: General
+  Errado: 'TÛnis com amorecimento para proporciona | tipo: str | fmt: General
+
+Col 70 - VALOR 12:
+  Certo:  'Produto original com garantia contra de | tipo: str | fmt: General
+  Errado: 'Produto original com garantia contra de | tipo: str | fmt: General
+
+Col 72 - VALOR 13:
+  Certo:  'value=0;standardized_values=Multicolori | tipo: str | fmt: General
+  Errado: 'value=0;standardized_values=Multicolori | tipo: str | fmt: General
+
+Col 74 - VALOR 14:
+  Certo:  'height#unit=centimeters;type#value=Sem  | tipo: str | fmt: General
+  Errado: 'height#unit=centimeters;type#value=Sem  | tipo: str | fmt: General
+
+Col 76 - VALOR 15:
+  Certo:  'size_system=br_footwear_size_system;age | tipo: str | fmt: General
+  Errado: 'size_system=br_footwear_size_system;age | tipo: str | fmt: General
+
+Col 78 - VALOR 16:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 80 - VALOR 17:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 82 - VALOR 18:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 84 - VALOR 19:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 86 - VALOR 20:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 88 - VALOR 21:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 90 - VALOR 22:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 92 - VALOR 23:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 94 - VALOR 24:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 96 - VALOR 25:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 98 - VALOR 26:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 100 - VALOR 27:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 102 - VALOR 28:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 104 - VALOR 29:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 106 - VALOR 30:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 110 - VALOR 32:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 112 - VALOR 33:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 114 - VALOR 34:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 116 - VALOR 35:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 118 - VALOR 36:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 120 - VALOR 37:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 122 - VALOR 38:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 124 - VALOR 39:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 126 - VALOR 40:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 128 - VALOR 41:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 130 - VALOR 42:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 132 - VALOR 43:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 134 - VALOR 44:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 136 - VALOR 45:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 138 - VALOR 46:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 140 - VALOR 47:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 142 - VALOR 48:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 144 - VALOR 49:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 146 - VALOR 50:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
+
+Col 148 - VALOR 51:
+  Certo:  None | tipo: NoneType | fmt: General
+  Errado: None | tipo: NoneType | fmt: General
