@@ -11,6 +11,16 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.1.4": {
+        "data": "2025-12-29",
+        "titulo": "Estabilidade e Interface",
+        "novidades": [
+            "✅ Correção crítica no Auto-Update (Repositório Público)",
+            "✨ Exibição da versão no Login e Configurações",
+            "🎨 Nova interface limpa de notificações",
+        ],
+        "cor": "#10B981"
+    },
     "1.1.3": {
         "data": "2025-12-29",
         "titulo": "Melhorias de Interface",

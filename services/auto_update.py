@@ -18,7 +18,7 @@ from urllib.error import URLError, HTTPError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Versão atual do aplicativo - ATUALIZAR A CADA RELEASE
-CURRENT_VERSION = "1.1.3"
+CURRENT_VERSION = "1.1.4"
 
 # Repositório GitHub
 GITHUB_OWNER = "samuelCriap"
