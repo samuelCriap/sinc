@@ -18,7 +18,7 @@ from urllib.error import URLError, HTTPError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Versão atual do aplicativo - ATUALIZAR A CADA RELEASE
-CURRENT_VERSION = "1.1.7"
+CURRENT_VERSION = "1.1.8"
 
 # Repositório GitHub
 GITHUB_OWNER = "samuelCriap"
@@ -222,8 +222,13 @@ def apply_update(new_exe_path: str) -> bool:
         
         log_file = os.path.join(tempfile.gettempdir(), "sinc_update.log")
         
-        batch_content = f'''@echo off
-echo [%date% %time%] Iniciando atualizacao... > "{log_file}"
+        batch_content = f'''@chcp 65001 > nul
+@echo off
+echo [%date% %time%] Iniciando atualizacao v{CURRENT_VERSION}... > "{log_file}"
+echo Diretorio atual: "%~dp0" >> "{log_file}"
+echo EXE Atual: "{current_exe}" >> "{log_file}"
+echo Novo EXE: "{new_exe_path}" >> "{log_file}"
+
 echo Aguardando aplicativo fechar...
 timeout /t 3 /nobreak > nul
 
