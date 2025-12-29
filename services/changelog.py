@@ -11,6 +11,16 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.2.2": {
+        "data": "2025-12-29",
+        "titulo": "Force Kill & Retry",
+        "novidades": [
+            "💪 taskkill /F para forçar encerramento de todos os SINC.exe",
+            "⏱️ Mais tempo de espera e 10 tentativas de cópia",
+            "✅ Se você está lendo isso, FUNCIONOU!",
+        ],
+        "cor": "#22C55E"
+    },
     "1.2.1": {
         "data": "2025-12-29",
         "titulo": "Update Funcionando!",

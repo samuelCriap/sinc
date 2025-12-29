@@ -18,7 +18,7 @@ from urllib.error import URLError, HTTPError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Versão atual do aplicativo - ATUALIZAR A CADA RELEASE
-CURRENT_VERSION = "1.2.1"
+CURRENT_VERSION = "1.2.2"
 
 # Repositório GitHub
 GITHUB_OWNER = "samuelCriap"
@@ -240,15 +240,21 @@ if "%ERRORLEVEL%"=="0" (
     goto wait_loop
 )
 
-echo [%date% %time%] Processo fechado. Iniciando copia... >> "{log_file}"
+echo [%date% %time%] Processo fechado. Forcando encerramento de todos os SINC.exe... >> "{log_file}"
+
+REM Forcar encerramento de TODOS os processos SINC.exe por nome
+taskkill /F /IM SINC.exe >> "{log_file}" 2>&1
+echo [%date% %time%] Aguardando liberacao do arquivo... >> "{log_file}"
+timeout /t 3 /nobreak > nul
 
 :copy_retry
 set /a retry_count+=1
+echo [%date% %time%] Tentativa de copia %retry_count%... >> "{log_file}"
 copy /Y "{new_exe_path}" "{current_exe}" >> "{log_file}" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo [%date% %time%] Falha na copia. Tentativa %retry_count%... >> "{log_file}"
-    if %retry_count% LSS 5 (
-        timeout /t 2 /nobreak > nul
+    if %retry_count% LSS 10 (
+        timeout /t 3 /nobreak > nul
         goto copy_retry
     )
     echo [%date% %time%] ERRO FATAL: Nao foi possivel substituir o arquivo. >> "{log_file}"
