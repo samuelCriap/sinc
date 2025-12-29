@@ -18,7 +18,7 @@ from urllib.error import URLError, HTTPError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Versão atual do aplicativo - ATUALIZAR A CADA RELEASE
-CURRENT_VERSION = "1.2.3"
+CURRENT_VERSION = "1.2.4"
 
 # Repositório GitHub
 GITHUB_OWNER = "samuelCriap"
@@ -265,8 +265,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo [%date% %time%] Atualizacao concluida. Limpando... >> "{log_file}"
 del "{new_exe_path}"
 
-echo [%date% %time%] Reiniciando o aplicativo... >> "{log_file}"
-start "" "{current_exe}"
+echo [%date% %time%] Atualizacao aplicada! Abra o SINC novamente. >> "{log_file}"
 
 del "%~f0"
 '''

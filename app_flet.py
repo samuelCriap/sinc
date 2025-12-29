@@ -164,20 +164,19 @@ def main(page: ft.Page):
                 )
                 
                 if success:
-                    # Atualização aplicada com sucesso - FECHAR AUTOMATICAMENTE
-                    status_text.value = "✅ Atualização baixada! Fechando..."
+                    # Atualização baixada - PEDIR PARA FECHAR MANUALMENTE
+                    status_text.value = "✅ Atualização baixada com sucesso!"
                     status_text.color = "#22C55E"
+                    progress_text.value = "Clique em 'Fechar' e abra o aplicativo novamente."
                     progress_bar.visible = False
+                    
+                    # Mudar botão para "Fechar Aplicativo"
+                    btn_atualizar.text = "Fechar Aplicativo"
+                    btn_atualizar.disabled = False
+                    btn_atualizar.bgcolor = "#22C55E"
+                    btn_atualizar.on_click = lambda e: fechar_com_taskkill()
+                    btn_depois.visible = False
                     page.update()
-                    
-                    # Aguardar 2 segundos e fechar o app automaticamente
-                    import time
-                    time.sleep(2)
-                    
-                    # Fechar o aplicativo para o batch script poder substituir
-                    page.window.close()
-                    import os
-                    os._exit(0)
                 else:
                     status_text.value = "❌ Erro na atualização. Tente novamente mais tarde."
                     status_text.color = "#EF4444"
@@ -187,6 +186,27 @@ def main(page: ft.Page):
                     page.update()
             
             threading.Thread(target=fazer_download, daemon=True).start()
+        
+        def fechar_com_taskkill():
+            """Fecha o aplicativo executando taskkill para garantir que todos os processos sejam encerrados."""
+            import subprocess
+            import os
+            
+            # Fechar a janela primeiro
+            page.window.close()
+            
+            # Executar taskkill para matar TODOS os processos SINC.exe
+            try:
+                subprocess.run(
+                    ['taskkill', '/F', '/IM', 'SINC.exe'],
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    capture_output=True
+                )
+            except:
+                pass
+            
+            # Forçar saída do Python
+            os._exit(0)
         
         def fechar_app():
             """Fecha o aplicativo após atualização."""

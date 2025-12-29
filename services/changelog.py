@@ -11,6 +11,16 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.2.4": {
+        "data": "2025-12-29",
+        "titulo": "Reinício Manual",
+        "novidades": [
+            "🔄 Agora o usuário fecha e abre manualmente o app",
+            "💪 Taskkill executado ao clicar em 'Fechar'",
+            "✅ Corrige erro de Python DLL no reinício automático",
+        ],
+        "cor": "#3B82F6"
+    },
     "1.2.3": {
         "data": "2025-12-29",
         "titulo": "Update 100% Funcional!",
