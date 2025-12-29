@@ -11,6 +11,15 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.1.9": {
+        "data": "2025-12-29",
+        "titulo": "Update UTF-8 Confirmado",
+        "novidades": [
+            "✅ Update funcionou mesmo na pasta 'Sincronização'!",
+            "🎉 Sistema de atualização 100% corrigido.",
+        ],
+        "cor": "#10B981"
+    },
     "1.1.8": {
         "data": "2025-12-29",
         "titulo": "Fix de Caractere Especial",
