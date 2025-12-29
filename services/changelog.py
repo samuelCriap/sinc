@@ -11,6 +11,15 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.2.5": {
+        "data": "2025-12-29",
+        "titulo": "Fluxo Manual Confirmado!",
+        "novidades": [
+            "🎉 SUCESSO! Update funcionou sem erro de DLL!",
+            "✅ Fluxo manual de fechar/abrir funciona perfeitamente.",
+        ],
+        "cor": "#22C55E"
+    },
     "1.2.4": {
         "data": "2025-12-29",
         "titulo": "Reinício Manual",
