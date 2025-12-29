@@ -18,7 +18,7 @@ from urllib.error import URLError, HTTPError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Versão atual do aplicativo - ATUALIZAR A CADA RELEASE
-CURRENT_VERSION = "1.1.4"
+CURRENT_VERSION = "1.1.5"
 
 # Repositório GitHub
 GITHUB_OWNER = "samuelCriap"
@@ -220,26 +220,42 @@ def apply_update(new_exe_path: str) -> bool:
         # Criar script batch para substituição
         batch_path = os.path.join(tempfile.gettempdir(), "sinc_update.bat")
         
+        log_file = os.path.join(tempfile.gettempdir(), "sinc_update.log")
+        
         batch_content = f'''@echo off
+echo [%date% %time%] Iniciando atualizacao... > "{log_file}"
 echo Aguardando aplicativo fechar...
-timeout /t 2 /nobreak > nul
+timeout /t 3 /nobreak > nul
 
 :wait_loop
 tasklist /FI "PID eq {os.getpid()}" 2>NUL | find /I /N "{os.getpid()}" >NUL
 if "%ERRORLEVEL%"=="0" (
+    echo [%date% %time%] Processo {os.getpid()} ainda rodando... >> "{log_file}"
     timeout /t 1 /nobreak > nul
     goto wait_loop
 )
 
-echo Aplicando atualizacao...
-copy /Y "{new_exe_path}" "{current_exe}"
+echo [%date% %time%] Processo fechado. Iniciando copia... >> "{log_file}"
 
-if %ERRORLEVEL% EQU 0 (
-    echo Atualizacao concluida com sucesso!
-    del "{new_exe_path}"
-) else (
-    echo Erro ao aplicar atualizacao!
+:copy_retry
+set /a retry_count+=1
+copy /Y "{new_exe_path}" "{current_exe}" >> "{log_file}" 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo [%date% %time%] Falha na copia. Tentativa %retry_count%... >> "{log_file}"
+    if %retry_count% LSS 5 (
+        timeout /t 2 /nobreak > nul
+        goto copy_retry
+    )
+    echo [%date% %time%] ERRO FATAL: Nao foi possivel substituir o arquivo. >> "{log_file}"
+    start "" notepad "{log_file}"
+    exit /b 1
 )
+
+echo [%date% %time%] Atualizacao concluida. Limpando... >> "{log_file}"
+del "{new_exe_path}"
+
+echo [%date% %time%] Reiniciando o aplicativo... >> "{log_file}"
+start "" "{current_exe}"
 
 del "%~f0"
 '''
