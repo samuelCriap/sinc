@@ -11,23 +11,33 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.1.3": {
+        "data": "2025-12-29",
+        "titulo": "Melhorias de Interface",
+        "novidades": [
+            "Exibição da versão no rodapé da tela de login",
+            "Exibição da versão na tela de configurações",
+            "Interface da notificação de atualização simplificada",
+        ],
+        "cor": "#22C55E"
+    },
     "1.1.2": {
         "data": "2025-12-29",
-        "titulo": "🩹 Correção de Bugs (Hotfix)",
+        "titulo": "Correção de Bugs",
         "novidades": [
-            "🐛 Correção de erro de compatibilidade com Flet (MaterialState)",
-            "⚡ Melhoria na estabilidade da notificação",
+            "Correção de erro de compatibilidade com Flet (MaterialState)",
+            "Melhoria na estabilidade da notificação",
         ],
         "cor": "#EF4444"
     },
     "1.1.1": {
         "data": "2025-12-29",
-        "titulo": "📢 Notificação de Novidades",
+        "titulo": "Notificação de Novidades",
         "novidades": [
-            "🎉 Notificação 'What's New' no canto inferior direito após login",
-            "⏱️ Auto-close após 5 segundos ou fechamento manual",
-            "📖 Botão 'Ver mais' expande histórico completo de versões",
-            "✨ Animação suave de slide lateral"
+            "Notificação 'What's New' no canto inferior direito após login",
+            "Auto-close após 5 segundos ou fechamento manual",
+            "Botão 'Ver mais' expande histórico completo de versões",
+            "Animação suave de slide lateral"
         ],
         "cor": "#8B5CF6"
     },

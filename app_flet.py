@@ -421,6 +421,7 @@ def main(page: ft.Page):
                         ft.Container(height=10),
                         ft.TextButton("Não tem conta? Cadastre-se", on_click=abrir_cadastro),
                         ft.Container(height=10),
+                        ft.Text(f"Versão {get_local_version()}", size=11, color="#888888"),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, 
                        alignment=ft.MainAxisAlignment.CENTER),
                     expand=True,
@@ -539,7 +540,7 @@ def main(page: ft.Page):
             notif_container = ft.Container(
                 content=ft.Column([
                     ft.Row([
-                        ft.Icon(ft.Icons.CELEBRATION, color="#FFFFFF", size=20),
+                        ft.Icon(ft.Icons.NEW_RELEASES, color="#FFFFFF", size=20),
                         ft.Text(
                             f"Novidades v{latest_version_info['version']}",
                             size=14,
