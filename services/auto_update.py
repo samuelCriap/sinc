@@ -24,8 +24,8 @@ CURRENT_VERSION = "1.1.3"
 GITHUB_OWNER = "samuelCriap"
 GITHUB_REPO = "sinc"
 
-# Token de acesso para repositório privado
-GITHUB_TOKEN = "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"
+# Token de acesso pessoal (PAT) - GERAR NO GITHUB: Settings -> Developer Settings -> Tokens
+GITHUB_TOKEN = ""  # Deixe vazio para repositórios públicos
 
 # Nome do arquivo EXE no release
 EXE_NAME = "SINC.exe"
