@@ -23,6 +23,7 @@ from services.usuarios_online import (
 from services.auto_update import (
     check_for_update, perform_full_update, get_local_version
 )
+from services.changelog import get_recent_versions, get_latest_version
 from utils.theme import ThemeManager
 from utils.toast import toast_success, toast_error, toast_warning, toast_info
 from views.tela_dashboard import criar_tela_dashboard
@@ -525,6 +526,179 @@ def main(page: ft.Page):
         
         conteudo = ft.Container(expand=True, padding=0)
         
+        # ══════════════════════════════════════════════════════════════
+        # NOTIFICAÇÃO DE CHANGELOG (What's New)
+        # ══════════════════════════════════════════════════════════════
+        notificacao_ref = [None]  # Referência para a notificação
+        
+        def mostrar_notificacao_changelog():
+            """Mostra notificação de changelog no canto inferior direito."""
+            latest_version_info = get_recent_versions(1)[0]
+            
+            # Container da notificação (pequeno)
+            notif_container = ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.CELEBRATION, color="#FFFFFF", size=20),
+                        ft.Text(
+                            f"Novidades v{latest_version_info['version']}",
+                            size=14,
+                            weight=ft.FontWeight.BOLD,
+                            color="#FFFFFF"
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.CLOSE,
+                            icon_size=16,
+                            icon_color="#FFFFFF",
+                            on_click=lambda e: fechar_notificacao(),
+                        ),
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=5),
+                    ft.Container(height=5),
+                    ft.Column([
+                        ft.Text(
+                            item[:50] + "..." if len(item) > 50 else item,
+                            size=11,
+                            color="#FFFFFF",
+                            opacity=0.9
+                        )
+                        for item in latest_version_info['novidades'][:2]
+                    ], spacing=3),
+                    ft.Container(height=5),
+                    ft.TextButton(
+                        "Ver mais",
+                        on_click=lambda e: expandir_changelog(),
+                        style=ft.ButtonStyle(
+                            color="#FFFFFF",
+                            bgcolor={ft.MaterialState.DEFAULT: ft.Colors.with_opacity(0.2, "#FFFFFF")}
+                        ),
+                    ),
+                ], spacing=5, tight=True),
+                bgcolor=latest_version_info.get('cor', '#22C55E'),
+                padding=15,
+                border_radius=10,
+                width=300,
+                shadow=ft.BoxShadow(
+                    blur_radius=15,
+                    color=ft.Colors.with_opacity(0.3, "#000000"),
+                    offset=ft.Offset(-2, 2)
+                ),
+                right=20,
+                bottom=20,
+                animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                offset=ft.Offset(2, 0),  # Começa fora da tela (direita)
+            )
+            
+            notificacao_ref[0] = notif_container
+            page.overlay.append(notif_container)
+            page.update()
+            
+            # Animar entrada
+            def animar_entrada():
+                notif_container.offset = ft.Offset(0, 0)
+                page.update()
+            
+            threading.Timer(0.1, animar_entrada).start()
+            
+            # Auto-close após 5 segundos
+            def auto_close():
+                if notificacao_ref[0] and notificacao_ref[0] in page.overlay:
+                    fechar_notificacao()
+            
+            threading.Timer(5, auto_close).start()
+        
+        def fechar_notificacao():
+            """Fecha a notificação com animação."""
+            if notificacao_ref[0] and notificacao_ref[0] in page.overlay:
+                notificacao_ref[0].offset = ft.Offset(2, 0)
+                page.update()
+                
+                def remover():
+                    if notificacao_ref[0] in page.overlay:
+                        page.overlay.remove(notificacao_ref[0])
+                        page.update()
+                
+                threading.Timer(0.3, remover).start()
+        
+        def expandir_changelog():
+            """Expande para modal completo com todas as versões."""
+            fechar_notificacao()
+            
+            versions = get_recent_versions(5)
+            
+            # Criar colunas de versões
+            version_cards = []
+            for v_info in versions:
+                version_cards.append(
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Row([
+                                ft.Container(
+                                    content=ft.Text(
+                                        f"v{v_info['version']}",
+                                        size=18,
+                                        weight=ft.FontWeight.BOLD,
+                                        color="#FFFFFF"
+                                    ),
+                                    bgcolor=v_info.get('cor', '#22C55E'),
+                                    padding=ft.padding.symmetric(horizontal=15, vertical=5),
+                                    border_radius=20,
+                                ),
+                                ft.Text(
+                                    v_info['data'],
+                                    size=12,
+                                    color="#888888"
+                                ),
+                            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                            ft.Container(height=5),
+                            ft.Text(
+                                v_info['titulo'],
+                                size=16,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Container(height=8),
+                            ft.Column([
+                                ft.Text(
+                                    item,
+                                    size=13,
+                                )
+                                for item in v_info['novidades']
+                            ], spacing=5),
+                        ], spacing=8),
+                        padding=20,
+                        border=ft.border.all(1, "#E5E7EB"),
+                        border_radius=10,
+                        bgcolor="#FAFAFA",
+                    )
+                )
+            
+            dlg_changelog = ft.AlertDialog(
+                modal=True,
+                title=ft.Row([
+                    ft.Icon(ft.Icons.HISTORY, color="#22C55E", size=28),
+                    ft.Text("O que há de novo?", weight=ft.FontWeight.BOLD, size=20),
+                ], spacing=10),
+                content=ft.Container(
+                    content=ft.Column(
+                        version_cards,
+                        spacing=15,
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
+                    width=600,
+                    height=500,
+                ),
+                actions=[
+                    ft.TextButton("Fechar", on_click=lambda e: fechar_dlg()),
+                ],
+            )
+            
+            def fechar_dlg():
+                dlg_changelog.open = False
+                page.update()
+            
+            page.overlay.append(dlg_changelog)
+            dlg_changelog.open = True
+            page.update()
+        
         def nav(idx):
             pagina_atual[0] = idx
             if idx == 0: 
@@ -730,6 +904,9 @@ def main(page: ft.Page):
             menu_container,
             ft.Container(content=conteudo, expand=True, bgcolor=ft.Colors.TRANSPARENT),
         ], expand=True, spacing=0))
+        
+        # Mostrar notificação de changelog após 1 segundo
+        threading.Timer(1, mostrar_notificacao_changelog).start()
     
     page.add(criar_login())
 
