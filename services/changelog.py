@@ -11,6 +11,16 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.2.0": {
+        "data": "2025-12-29",
+        "titulo": "Correção Final de Auto-Update",
+        "novidades": [
+            "🔧 Correção do subprocess para Windows (processo independente)",
+            "⚡ App agora fecha automaticamente após download",
+            "✅ Se você está lendo isso, o update finalmente funcionou!",
+        ],
+        "cor": "#10B981"
+    },
     "1.1.9": {
         "data": "2025-12-29",
         "titulo": "Update UTF-8 Confirmado",

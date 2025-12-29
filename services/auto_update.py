@@ -18,7 +18,7 @@ from urllib.error import URLError, HTTPError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Versão atual do aplicativo - ATUALIZAR A CADA RELEASE
-CURRENT_VERSION = "1.1.9"
+CURRENT_VERSION = "1.2.0"
 
 # Repositório GitHub
 GITHUB_OWNER = "samuelCriap"
@@ -268,12 +268,15 @@ del "%~f0"
         with open(batch_path, 'w', encoding='utf-8') as f:
             f.write(batch_content)
         
-        # Executar script batch em background
+        # Executar script batch em background (processo independente)
         import subprocess
+        
+        # No Windows, usar shell=True com start /b para garantir que o processo sobreviva
+        # ao fechamento do app pai
         subprocess.Popen(
-            ['cmd', '/c', batch_path],
-            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-            close_fds=True
+            f'start /b "" cmd /c "{batch_path}"',
+            shell=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
         )
         
         return True

@@ -164,18 +164,20 @@ def main(page: ft.Page):
                 )
                 
                 if success:
-                    # Atualização aplicada com sucesso
-                    status_text.value = "✅ Atualização concluída!"
+                    # Atualização aplicada com sucesso - FECHAR AUTOMATICAMENTE
+                    status_text.value = "✅ Atualização baixada! Fechando..."
                     status_text.color = "#22C55E"
-                    progress_text.value = "Feche o aplicativo e abra novamente."
                     progress_bar.visible = False
-                    
-                    # Mudar botões
-                    btn_atualizar.text = "Fechar Aplicativo"
-                    btn_atualizar.disabled = False
-                    btn_atualizar.on_click = lambda e: fechar_app()
-                    btn_depois.visible = False
                     page.update()
+                    
+                    # Aguardar 2 segundos e fechar o app automaticamente
+                    import time
+                    time.sleep(2)
+                    
+                    # Fechar o aplicativo para o batch script poder substituir
+                    page.window.close()
+                    import os
+                    os._exit(0)
                 else:
                     status_text.value = "❌ Erro na atualização. Tente novamente mais tarde."
                     status_text.color = "#EF4444"
