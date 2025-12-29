@@ -6,14 +6,23 @@ Arquivo principal refatorado - importa telas de views/
 """
 import flet as ft
 import os
-import time
+import sys
+import threading
+from utils import resource_path
 from services.database_sinc import (
     create_tables, criar_usuario_inicial, verificar_usuario, set_db_path,
     cadastrar_usuario, listar_usuarios_pendentes, listar_todos_usuarios,
     aprovar_usuario, rejeitar_usuario, alterar_cargo_usuario, registrar_log
 )
-from services.config_rede import get_config, save_config, get_db_path, test_connection
+from services.config_rede import get_config, save_config, get_db_path, test_connection, config_exists
 from services.backup import executar_backup_automatico
+from services.usuarios_online import (
+    registrar_usuario_online, listar_usuarios_online, 
+    criar_tabela_usuarios_online, remover_usuario_online
+)
+from services.auto_update import (
+    check_for_update, perform_full_update, get_local_version
+)
 from utils.theme import ThemeManager
 from utils.toast import toast_success, toast_error, toast_warning, toast_info
 from views.tela_dashboard import criar_tela_dashboard
@@ -41,11 +50,16 @@ def main(page: ft.Page):
     # Sistema de tema
     theme = ThemeManager()
     
-    create_tables()
-    criar_usuario_inicial()
-    
-    # Backup automático diário
-    executar_backup_automatico()
+    # Só inicializa DB se já existe configuração salva
+    # Novos usuários vão configurar o IP primeiro na tela de login
+    if config_exists():
+        try:
+            create_tables()
+            criar_usuario_inicial()
+            # Backup automático diário
+            executar_backup_automatico()
+        except Exception as e:
+            print(f"[Aviso] Erro ao conectar ao banco: {e}")
     
     usuario_logado = [None]
     pagina_atual = [0]
@@ -75,15 +89,183 @@ def main(page: ft.Page):
     page.on_keyboard_event = on_keyboard
     
     # ══════════════════════════════════════════════════════════════
+    # VERIFICAÇÃO DE ATUALIZAÇÃO
+    # ══════════════════════════════════════════════════════════════
+    def verificar_atualizacao_e_continuar(nome_usuario):
+        """Verifica se há atualização disponível e mostra diálogo se houver."""
+        
+        def checar_em_thread():
+            try:
+                has_update, new_version, download_url, release_notes = check_for_update()
+                
+                if has_update and download_url:
+                    # Mostrar diálogo de atualização
+                    mostrar_dialogo_atualizacao(nome_usuario, new_version, download_url, release_notes)
+                else:
+                    # Sem atualização, continuar para splash
+                    mostrar_splash(nome_usuario)
+                    
+            except Exception as ex:
+                print(f"[AutoUpdate] Erro na verificação: {ex}")
+                # Em caso de erro, continuar normalmente
+                mostrar_splash(nome_usuario)
+        
+        # Executar verificação em thread separada para não bloquear UI
+        threading.Thread(target=checar_em_thread, daemon=True).start()
+    
+    def mostrar_dialogo_atualizacao(nome_usuario, new_version, download_url, release_notes):
+        """Mostra diálogo para o usuário decidir se quer atualizar."""
+        
+        local_version = get_local_version()
+        
+        # Componentes do diálogo
+        progress_bar = ft.ProgressBar(width=350, visible=False, color="#22C55E")
+        progress_text = ft.Text("", size=12, color="#666666")
+        status_text = ft.Text("", size=12, color="#666666")
+        btn_atualizar = ft.ElevatedButton(
+            "🚀 Atualizar Agora",
+            bgcolor="#22C55E",
+            color="#FFFFFF",
+            width=150,
+        )
+        btn_depois = ft.TextButton("Depois", width=100)
+        
+        def fechar_dialogo(e=None):
+            dlg_update.open = False
+            page.update()
+            mostrar_splash(nome_usuario)
+        
+        def iniciar_atualizacao(e):
+            btn_atualizar.disabled = True
+            btn_depois.disabled = True
+            progress_bar.visible = True
+            status_text.value = "Baixando atualização..."
+            page.update()
+            
+            def fazer_download():
+                def on_progress(baixado, total):
+                    if total > 0:
+                        pct = baixado / total
+                        progress_bar.value = pct
+                        mb_baixado = baixado / (1024 * 1024)
+                        mb_total = total / (1024 * 1024)
+                        progress_text.value = f"{mb_baixado:.1f} MB / {mb_total:.1f} MB"
+                        page.update()
+                
+                def on_status(msg):
+                    status_text.value = msg
+                    page.update()
+                
+                success = perform_full_update(
+                    download_url,
+                    progress_callback=on_progress,
+                    status_callback=on_status
+                )
+                
+                if success:
+                    # Atualização aplicada com sucesso
+                    status_text.value = "✅ Atualização concluída!"
+                    status_text.color = "#22C55E"
+                    progress_text.value = "Feche o aplicativo e abra novamente."
+                    progress_bar.visible = False
+                    
+                    # Mudar botões
+                    btn_atualizar.text = "Fechar Aplicativo"
+                    btn_atualizar.disabled = False
+                    btn_atualizar.on_click = lambda e: fechar_app()
+                    btn_depois.visible = False
+                    page.update()
+                else:
+                    status_text.value = "❌ Erro na atualização. Tente novamente mais tarde."
+                    status_text.color = "#EF4444"
+                    btn_atualizar.disabled = False
+                    btn_depois.disabled = False
+                    btn_atualizar.text = "Tentar Novamente"
+                    page.update()
+            
+            threading.Thread(target=fazer_download, daemon=True).start()
+        
+        def fechar_app():
+            """Fecha o aplicativo após atualização."""
+            import os
+            page.window.close()
+            threading.Timer(0.5, lambda: os._exit(0)).start()
+        
+        btn_atualizar.on_click = iniciar_atualizacao
+        btn_depois.on_click = fechar_dialogo
+        
+        # Formatar notas do release (limitar tamanho)
+        notas_resumidas = ""
+        if release_notes:
+            notas_resumidas = release_notes[:300] + "..." if len(release_notes) > 300 else release_notes
+        
+        dlg_update = ft.AlertDialog(
+            modal=True,
+            title=ft.Row([
+                ft.Icon(ft.Icons.SYSTEM_UPDATE, color="#22C55E", size=28),
+                ft.Text("Nova Versão Disponível!", weight=ft.FontWeight.BOLD, size=18),
+            ], spacing=10),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text(
+                        f"Uma nova versão do SINC está disponível.",
+                        size=14,
+                    ),
+                    ft.Container(height=10),
+                    ft.Row([
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text("Versão Atual", size=11, color="#888888"),
+                                ft.Text(f"v{local_version}", size=16, weight=ft.FontWeight.BOLD),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+                            bgcolor="#F3F4F6",
+                            padding=15,
+                            border_radius=8,
+                            expand=True,
+                        ),
+                        ft.Icon(ft.Icons.ARROW_FORWARD, color="#22C55E"),
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text("Nova Versão", size=11, color="#888888"),
+                                ft.Text(f"{new_version}", size=16, weight=ft.FontWeight.BOLD, color="#22C55E"),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+                            bgcolor="#ECFDF5",
+                            padding=15,
+                            border_radius=8,
+                            expand=True,
+                        ),
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=15),
+                    ft.Container(height=10),
+                    ft.Text(notas_resumidas, size=12, color="#666666") if notas_resumidas else ft.Container(),
+                    ft.Container(height=15),
+                    progress_bar,
+                    progress_text,
+                    status_text,
+                ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                width=380,
+                padding=10,
+            ),
+            actions=[
+                btn_depois,
+                btn_atualizar,
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        page.overlay.append(dlg_update)
+        dlg_update.open = True
+        page.update()
+    
+    # ══════════════════════════════════════════════════════════════
     # TELA DE LOGIN
     # ══════════════════════════════════════════════════════════════
     def criar_login():
         # Carregar configuração salva
         config = get_config()
         
-        servidor = ft.TextField(label="Servidor (IP ou localhost)", prefix_icon=ft.Icons.DNS,
+        servidor = ft.TextField(label="Servidor MySQL (IP)", prefix_icon=ft.Icons.DNS,
                                border_radius=8, bgcolor="#FFFFFF", width=300,
-                               value=config.get('server_ip', 'localhost'),
+                               value=config.get('mysql_host', 'localhost'),
                                hint_text="Ex: 192.168.0.126 ou localhost")
         usuario = ft.TextField(label="Usuário", prefix_icon=ft.Icons.PERSON_OUTLINE, 
                                border_radius=8, bgcolor="#FFFFFF", width=300,
@@ -107,22 +289,18 @@ def main(page: ft.Page):
             page.update()
         
         def login(e):
-            # Primeiro conecta ao servidor
+            # Configurar conexão MySQL
             ip = servidor.value.strip() or "localhost"
-            db_path = get_db_path(ip)
             
-            # Salva configuração
-            save_config(ip)
+            # Salva configuração MySQL
+            save_config(mysql_host=ip)
             
-            # Define o caminho do banco
-            set_db_path(db_path)
-            
-            # Tenta criar tabelas (se for servidor novo)
+            # Tenta criar tabelas no MySQL
             try:
                 create_tables()
                 criar_usuario_inicial()
             except Exception as ex:
-                erro.value = f"Erro ao conectar: {str(ex)}"
+                erro.value = f"Erro ao conectar MySQL: {str(ex)}"
                 page.update()
                 return
             
@@ -131,7 +309,9 @@ def main(page: ft.Page):
                 usuario_logado[0] = dados
                 nome = dados.get('nome', dados.get('username', 'Usuário'))
                 registrar_log(usuario.value, "Login", f"Usuário logou no sistema")
-                mostrar_splash(nome)
+                
+                # Verificar atualização disponível
+                verificar_atualizacao_e_continuar(nome)
             else:
                 erro.value = msg
                 page.update()
@@ -205,7 +385,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.Column([
                         ft.Image(
-                            src=os.path.join(os.path.dirname(__file__), "data", "logo2.png"),
+                            src=resource_path(os.path.join("data", "logo2.png")),
                             width=360, height=360, fit=ft.ImageFit.CONTAIN,
                         ),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, 
@@ -284,7 +464,7 @@ def main(page: ft.Page):
                 ),
             ]),
             offset=ft.Offset(2, 0),  # Começa fora da tela (direita)
-            animate_offset=ft.Animation(1200, ft.AnimationCurve.EASE_OUT_CUBIC),
+            animate_offset=ft.Animation(800, ft.AnimationCurve.EASE_OUT_CUBIC),
         )
         
         texto_bemvindo = ft.Container(
@@ -296,7 +476,7 @@ def main(page: ft.Page):
                 opacity=0.9,
             ),
             opacity=0,
-            animate_opacity=ft.Animation(800, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(600, ft.AnimationCurve.EASE_OUT),
         )
         
         splash = ft.Container(
@@ -317,18 +497,24 @@ def main(page: ft.Page):
         page.add(splash)
         page.update()
         
-        # Animação: texto entra da direita
-        time.sleep(0.1)
-        texto_sinc.offset = ft.Offset(0, 0)  # Move para o centro
-        page.update()
+        # ══════════════════════════════════════════════════════════════
+        # ANIMAÇÃO NÃO-BLOQUEANTE usando threading
+        # ══════════════════════════════════════════════════════════════
+        def animar_texto():
+            texto_sinc.offset = ft.Offset(0, 0)  # Move para o centro
+            page.update()
         
-        # Animação: bem-vindo aparece
-        time.sleep(1.2)
-        texto_bemvindo.opacity = 1
-        page.update()
+        def animar_bemvindo():
+            texto_bemvindo.opacity = 1
+            page.update()
         
-        time.sleep(2.5)
-        abrir_app()
+        def finalizar_splash():
+            abrir_app()
+        
+        # Agendar animações com timers (não-bloqueante)
+        threading.Timer(0.05, animar_texto).start()
+        threading.Timer(0.9, animar_bemvindo).start()
+        threading.Timer(1.8, finalizar_splash).start()
     
     # ══════════════════════════════════════════════════════════════
     # APP PRINCIPAL
@@ -346,7 +532,7 @@ def main(page: ft.Page):
             elif idx == 1: 
                 conteudo.content = criar_tela_canais(page, abrir_canal, theme)
             elif idx == 2: 
-                conteudo.content = criar_tela_lista_preco(page, save_picker, theme)
+                conteudo.content = criar_tela_lista_preco(page, save_picker, usuario_logado, theme)
             elif idx == 3: 
                 conteudo.content = criar_tela_blocklist(page, theme)
             elif idx == 4:
@@ -365,6 +551,83 @@ def main(page: ft.Page):
         def abrir_canal(canal):
             conteudo.content = criar_tela_canal(page, canal, file_picker, usuario_logado, nav, theme)
             page.update()
+        
+        # ══════════════════════════════════════════════════════════════
+        # SISTEMA DE USUÁRIOS ONLINE
+        # ══════════════════════════════════════════════════════════════
+        ping_ativo = [True]
+        
+        def fazer_ping():
+            """Envia ping para manter status online"""
+            if ping_ativo[0] and usuario_logado[0]:
+                username = usuario_logado[0].get('username', '')
+                if username:
+                    registrar_usuario_online(username)
+                
+                # Timer deve ser Daemon para não impedir o fechamento do app
+                t = threading.Timer(30, fazer_ping)
+                t.daemon = True
+                t.start()
+        
+        def fazer_logout(e=None):
+            """Remove usuário da lista online e fecha definitivamente"""
+            ping_ativo[0] = False
+            if usuario_logado[0]:
+                username = usuario_logado[0].get('username', '')
+                if username:
+                    try:
+                        remover_usuario_online(username)
+                    except:
+                        pass
+            
+            # Fecha a janela e agenda o encerramento do processo
+            def encerrar():
+                import os
+                os._exit(0)
+            
+            page.window.close()
+            # Aguarda 0.5 segundo antes de forçar encerramento
+            t_exit = threading.Timer(0.5, encerrar)
+            t_exit.daemon = True
+            t_exit.start()
+        
+        def criar_indicador_online():
+            """Cria indicador de usuários online no menu"""
+            try:
+                online = listar_usuarios_online(timeout_minutos=2)
+                
+                # Lista de bolinhas com nomes
+                items = []
+                for u in online[:5]:  # Max 5 usuários
+                    username = u.get('username', '')
+                    items.append(
+                        ft.Row([
+                            ft.Container(
+                                width=8, height=8, 
+                                bgcolor="#22C55E",  # Verde
+                                border_radius=4,
+                            ),
+                            ft.Text(username[:15], size=10, color="#E0E0E0") if menu_expandido[0] else ft.Container(),
+                        ], spacing=5)
+                    )
+                
+                if not items:
+                    items.append(ft.Text("Nenhum online", size=9, color="#888888", italic=True) if menu_expandido[0] else ft.Container())
+                
+                return ft.Container(
+                    content=ft.Column(items, spacing=3),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                    visible=menu_expandido[0],
+                )
+            except:
+                return ft.Container()
+        
+        # Iniciar ping e criar tabela
+        try:
+            criar_tabela_usuarios_online()
+            fazer_ping()
+        except Exception as ex:
+            print(f"Erro ao iniciar sistema de usuários online: {ex}")
         
         def toggle_theme(e):
             theme.toggle()
@@ -428,9 +691,11 @@ def main(page: ft.Page):
                 ft.Container(height=30),
                 *menu_items,
                 ft.Container(expand=True),
+                # Indicador de usuários online
+                criar_indicador_online(),
                 ft.Column([
                     ft.IconButton(ft.Icons.BRIGHTNESS_6, icon_color="#E0E0E0", tooltip="Alternar tema", on_click=toggle_theme),
-                    ft.IconButton(ft.Icons.LOGOUT, icon_color="#E0E0E0", tooltip="Sair", on_click=lambda e: page.window.close()),
+                    ft.IconButton(ft.Icons.LOGOUT, icon_color="#E0E0E0", tooltip="Sair", on_click=fazer_logout),
                 ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Container(height=15),
             ]
