@@ -11,6 +11,15 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHANGELOG: Dict[str, Dict] = {
+    "1.1.2": {
+        "data": "2025-12-29",
+        "titulo": "🩹 Correção de Bugs (Hotfix)",
+        "novidades": [
+            "🐛 Correção de erro de compatibilidade com Flet (MaterialState)",
+            "⚡ Melhoria na estabilidade da notificação",
+        ],
+        "cor": "#EF4444"
+    },
     "1.1.1": {
         "data": "2025-12-29",
         "titulo": "📢 Notificação de Novidades",

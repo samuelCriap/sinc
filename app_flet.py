@@ -569,7 +569,7 @@ def main(page: ft.Page):
                         on_click=lambda e: expandir_changelog(),
                         style=ft.ButtonStyle(
                             color="#FFFFFF",
-                            bgcolor={ft.MaterialState.DEFAULT: ft.Colors.with_opacity(0.2, "#FFFFFF")}
+                            bgcolor={ft.ControlState.DEFAULT: ft.Colors.with_opacity(0.2, "#FFFFFF")}
                         ),
                     ),
                 ], spacing=5, tight=True),
