@@ -1,14 +1,13 @@
 """
-Módulo de acesso ao banco de dados SQLite para o Sistema de Sincronização de SKUs
+Módulo de acesso ao banco de dados MySQL para o Sistema de Sincronização de SKUs
 """
-import sqlite3
+import mysql.connector
+from mysql.connector import Error as MySQLError
 import os
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
 
-# Caminho do banco de dados (padrão local, pode ser alterado via set_db_path)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "data", "sincronizacao.db")
+from services.config_rede import get_mysql_config
 
 # Lista de canais suportados
 CANAIS = [
@@ -20,238 +19,244 @@ CANAIS = [
 STATUS_PRODUTO = ["", "ATIVO", "CATALOGANDO", "ERRO"]
 
 
-def set_db_path(new_path: str):
-    """Define um novo caminho para o banco de dados (usado para conexão de rede)."""
-    global DB_PATH
-    DB_PATH = new_path
-
-
-def get_db_path() -> str:
-    """Retorna o caminho atual do banco de dados."""
-    return DB_PATH
-
-
-def get_connection() -> sqlite3.Connection:
-    """Retorna uma conexão com o banco de dados."""
-    # Cria pasta apenas se for caminho local
-    if not DB_PATH.startswith("\\\\"):
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)  # Espera até 10s se banco travado
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout = 5000")  # Timeout adicional de 5s
+def get_connection():
+    """
+    Retorna uma conexão MySQL otimizada para performance.
+    Usa cursor do tipo dictionary para retornar rows como dicts.
+    """
+    config = get_mysql_config()
+    
+    conn = mysql.connector.connect(
+        host=config['host'],
+        port=config['port'],
+        user=config['user'],
+        password=config['password'],
+        database=config['database'],
+        autocommit=False,
+        connection_timeout=10,
+        # Pool de conexões para melhor performance
+        pool_name="sinc_pool",
+        pool_size=5,
+        pool_reset_session=True
+    )
+    
     return conn
 
 
 def create_tables():
-    """Cria as tabelas do banco de dados se não existirem."""
+    """Cria as tabelas do banco de dados MySQL se não existirem."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     # Tabela principal de produtos sincronizados
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos_sinc (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo_produto TEXT NOT NULL,
-            sku TEXT,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            codigo_produto VARCHAR(100) NOT NULL,
+            sku VARCHAR(100),
             descricao TEXT,
-            marca TEXT,
-            gtin TEXT,
-            categoria TEXT,
-            preco REAL,
-            importado_por TEXT,
-            col_b TEXT,
-            col_c TEXT,
-            col_i TEXT,
-            col_k TEXT,
-            col_l TEXT,
-            col_m TEXT,
-            col_n TEXT,
-            col_o TEXT,
-            col_p TEXT,
-            col_q TEXT,
-            col_r TEXT,
-            col_ab TEXT,
-            col_ac TEXT,
-            col_ae TEXT,
-            col_af TEXT,
-            col_ag TEXT,
-            col_ao TEXT,
-            col_ap TEXT,
+            marca VARCHAR(200),
+            gtin VARCHAR(50),
+            categoria VARCHAR(200),
+            preco DECIMAL(10,2),
+            importado_por VARCHAR(100),
+            col_b VARCHAR(255),
+            col_c VARCHAR(255),
+            col_i VARCHAR(255),
+            col_k VARCHAR(255),
+            col_l VARCHAR(255),
+            col_m VARCHAR(255),
+            col_n VARCHAR(255),
+            col_o VARCHAR(255),
+            col_p VARCHAR(255),
+            col_q VARCHAR(255),
+            col_r VARCHAR(255),
+            col_ab VARCHAR(255),
+            col_ac VARCHAR(255),
+            col_ae VARCHAR(255),
+            col_af VARCHAR(255),
+            col_ag VARCHAR(255),
+            col_ao VARCHAR(255),
+            col_ap VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(codigo_produto)
-        )
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_codigo_produto (codigo_produto)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
     # Status por canal (1 linha por produto/canal)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produto_canal (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            produto_id INTEGER NOT NULL,
-            canal TEXT NOT NULL,
-            status TEXT DEFAULT '',
-            bloqueado INTEGER DEFAULT 0,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            produto_id INT NOT NULL,
+            canal VARCHAR(50) NOT NULL,
+            status VARCHAR(50) DEFAULT '',
+            bloqueado TINYINT(1) DEFAULT 0,
             motivo_bloqueio TEXT,
-            importado_omnie INTEGER DEFAULT 0,
-            importado_anymarket INTEGER DEFAULT 0,
-            usuario_alteracao TEXT,
-            data_alteracao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (produto_id) REFERENCES produtos_sinc(id),
-            UNIQUE(produto_id, canal)
-        )
+            importado_omnie TINYINT(1) DEFAULT 0,
+            importado_anymarket TINYINT(1) DEFAULT 0,
+            usuario_alteracao VARCHAR(100),
+            cod_marketplace VARCHAR(100),
+            data_alteracao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_produto_canal (produto_id, canal),
+            INDEX idx_produto_id (produto_id),
+            INDEX idx_canal (canal)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-    # Blocklist por canal - tipos: MARCA (bloqueia toda a marca) ou MODELO (bloqueia modelo específico)
+    
+    # Blocklist por canal
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS blocklist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            canal TEXT NOT NULL,
-            termo_bloqueio TEXT NOT NULL,
-            tipo TEXT DEFAULT 'MODELO',
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            canal VARCHAR(50) NOT NULL,
+            termo_bloqueio VARCHAR(255) NOT NULL,
+            tipo VARCHAR(50) DEFAULT 'MODELO',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(canal, termo_bloqueio)
-        )
+            UNIQUE KEY uk_canal_termo (canal, termo_bloqueio)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
     # Log de importações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS importacoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INT PRIMARY KEY AUTO_INCREMENT,
             arquivo TEXT,
-            tipo_modelo TEXT,
-            qtd_produtos INTEGER,
-            usuario TEXT,
+            tipo_modelo VARCHAR(100),
+            qtd_produtos INT,
+            usuario VARCHAR(100),
             data_importacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
-    # Tabela de usuários com cargo e status de aprovação
+    # Tabela de usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            senha TEXT NOT NULL,
-            nome TEXT,
-            email TEXT,
-            cargo TEXT DEFAULT 'usuario',
-            status TEXT DEFAULT 'PENDENTE',
-            ativo INTEGER DEFAULT 1,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            senha VARCHAR(255) NOT NULL,
+            nome VARCHAR(200),
+            email VARCHAR(200),
+            cargo VARCHAR(50) DEFAULT 'usuario',
+            status VARCHAR(50) DEFAULT 'PENDENTE',
+            ativo TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
-    # Tabela de listas de preço (vinculada às importações)
+    # Tabela de listas de preço
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS lista_precos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            importacao_id INTEGER,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            importacao_id INT,
             caminho_planilha TEXT NOT NULL,
-            nome_planilha TEXT,
-            qtd_produtos INTEGER,
-            data_inicio_vigencia TEXT,
-            data_fim_vigencia TEXT,
+            nome_planilha VARCHAR(255),
+            qtd_produtos INT,
+            data_inicio_vigencia VARCHAR(20),
+            data_fim_vigencia VARCHAR(20),
             caminho_csv TEXT,
-            baixado INTEGER DEFAULT 0,
-            usuario TEXT,
+            baixado TINYINT(1) DEFAULT 0,
+            usuario VARCHAR(100),
+            baixado_por VARCHAR(100),
             data_geracao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
-    # Tabela de produtos bloqueados por canal (não aparecem em produto_canal, só aqui)
+    # Tabela de produtos bloqueados por canal
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produto_blocklist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            produto_id INTEGER NOT NULL,
-            canal TEXT NOT NULL,
-            termo_bloqueado TEXT,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            produto_id INT NOT NULL,
+            canal VARCHAR(50) NOT NULL,
+            termo_bloqueado VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (produto_id) REFERENCES produtos_sinc(id),
-            UNIQUE(produto_id, canal)
-        )
+            UNIQUE KEY uk_produto_canal (produto_id, canal),
+            INDEX idx_produto_id (produto_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
     # Tabela de log de atividades
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS log_atividades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT NOT NULL,
-            acao TEXT NOT NULL,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            usuario VARCHAR(100) NOT NULL,
+            acao VARCHAR(200) NOT NULL,
             detalhes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_usuario (usuario),
+            INDEX idx_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
     # Tabela de controle de chamados
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS chamados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            numero TEXT NOT NULL,
-            prioridade TEXT DEFAULT 'MÉDIA',
-            canal TEXT,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            numero VARCHAR(100) NOT NULL,
+            prioridade VARCHAR(50) DEFAULT 'MÉDIA',
+            canal VARCHAR(50),
             observacoes TEXT,
             link TEXT,
-            criado_por TEXT NOT NULL,
-            na_lixeira INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+            criado_por VARCHAR(100) NOT NULL,
+            na_lixeira TINYINT(1) DEFAULT 0,
+            concluido TINYINT(1) DEFAULT 0,
+            data_conclusao TIMESTAMP NULL,
+            concluido_por VARCHAR(100),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_prioridade (prioridade),
+            INDEX idx_criado_por (criado_por)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
     # Tabela de histórico de alterações por produto
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS historico_produto (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sku TEXT NOT NULL,
-            campo TEXT NOT NULL,
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            sku VARCHAR(100) NOT NULL,
+            campo VARCHAR(100) NOT NULL,
             valor_antigo TEXT,
             valor_novo TEXT,
-            usuario TEXT NOT NULL,
-            canal TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+            usuario VARCHAR(100) NOT NULL,
+            canal VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_sku (sku),
+            INDEX idx_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     
-    # Índices para histórico
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_sku ON historico_produto(sku)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_created ON historico_produto(created_at)")
-    
-    # ══════════════════════════════════════════════════════════════
-    # MIGRAÇÕES - Adiciona colunas novas se não existirem
-    # ══════════════════════════════════════════════════════════════
-    try:
-        cursor.execute("ALTER TABLE produto_canal ADD COLUMN cod_marketplace TEXT")
-    except sqlite3.OperationalError:
-        pass  # Coluna já existe
-    
     conn.commit()
+    cursor.close()
     conn.close()
 
 
 def criar_usuario_inicial():
     """Cria um usuário admin inicial se não existir."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
-    count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) AS cnt FROM usuarios")
+    result = cursor.fetchone()
+    count = result['cnt'] if result else 0
     
     if count == 0:
         cursor.execute(
-            "INSERT INTO usuarios (username, senha, nome, email, cargo, status) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO usuarios (username, senha, nome, email, cargo, status) VALUES (%s, %s, %s, %s, %s, %s)",
             ("admin", "admin123", "Administrador", "admin@sistema.com", "admin", "ATIVO")
         )
         conn.commit()
     
+    cursor.close()
     conn.close()
 
 
 def cadastrar_usuario(username: str, senha: str, nome: str, email: str) -> tuple:
     """Cadastra um novo usuário com status PENDENTE."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
         cursor.execute("""
             INSERT INTO usuarios (username, senha, nome, email, cargo, status)
-            VALUES (?, ?, ?, ?, 'usuario', 'PENDENTE')
+            VALUES (%s, %s, %s, %s, 'usuario', 'PENDENTE')
         """, (username, senha, nome, email))
         conn.commit()
         return True, "Cadastro realizado! Aguarde aprovação do administrador."
@@ -266,9 +271,9 @@ def cadastrar_usuario(username: str, senha: str, nome: str, email: str) -> tuple
 def listar_usuarios_pendentes() -> list:
     """Lista usuários com status PENDENTE."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT id, username, nome, email, created_at FROM usuarios WHERE status = 'PENDENTE'")
-    result = [dict(r) for r in cursor.fetchall()]
+    result = cursor.fetchall()
     conn.close()
     return result
 
@@ -276,9 +281,9 @@ def listar_usuarios_pendentes() -> list:
 def listar_todos_usuarios() -> list:
     """Lista todos os usuários."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT id, username, nome, email, cargo, status, created_at FROM usuarios")
-    result = [dict(r) for r in cursor.fetchall()]
+    result = cursor.fetchall()
     conn.close()
     return result
 
@@ -286,8 +291,8 @@ def listar_todos_usuarios() -> list:
 def aprovar_usuario(user_id: int, cargo: str = "usuario") -> bool:
     """Aprova um usuário pendente."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET status = 'ATIVO', cargo = ? WHERE id = ?", (cargo, user_id))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("UPDATE usuarios SET status = 'ATIVO', cargo = %s WHERE id = %s", (cargo, user_id))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -297,8 +302,8 @@ def aprovar_usuario(user_id: int, cargo: str = "usuario") -> bool:
 def rejeitar_usuario(user_id: int) -> bool:
     """Rejeita um usuário pendente (deleta)."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM usuarios WHERE id = ?", (user_id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("DELETE FROM usuarios WHERE id = %s", (user_id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -308,8 +313,8 @@ def rejeitar_usuario(user_id: int) -> bool:
 def alterar_cargo_usuario(user_id: int, novo_cargo: str) -> bool:
     """Altera o cargo de um usuário."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET cargo = ? WHERE id = ?", (novo_cargo, user_id))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("UPDATE usuarios SET cargo = %s WHERE id = %s", (novo_cargo, user_id))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -320,8 +325,8 @@ def bloquear_usuario(user_id: int, bloquear: bool = True) -> bool:
     """Bloqueia (status=INATIVO) ou desbloqueia (status=ATIVO) um usuário."""
     status = "INATIVO" if bloquear else "ATIVO"
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET status = ? WHERE id = ?", (status, user_id))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("UPDATE usuarios SET status = %s WHERE id = %s", (status, user_id))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -331,8 +336,8 @@ def bloquear_usuario(user_id: int, bloquear: bool = True) -> bool:
 def remover_usuario(user_id: int) -> bool:
     """Remove um usuário permanentemente do banco de dados."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM usuarios WHERE id = ?", (user_id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("DELETE FROM usuarios WHERE id = %s", (user_id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -347,10 +352,10 @@ def registrar_log(usuario: str, acao: str, detalhes: str = None):
     """Registra uma ação no log de atividades."""
     try:
         conn = get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         cursor.execute("""
             INSERT INTO log_atividades (usuario, acao, detalhes)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (usuario, acao, detalhes))
         conn.commit()
         conn.close()
@@ -361,14 +366,14 @@ def registrar_log(usuario: str, acao: str, detalhes: str = None):
 def listar_logs(limite: int = 100) -> list:
     """Lista os últimos registros de log."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT usuario, acao, detalhes, created_at 
         FROM log_atividades 
         ORDER BY created_at DESC 
-        LIMIT ?
+        LIMIT %s
     """, (limite,))
-    result = [dict(r) for r in cursor.fetchall()]
+    result = cursor.fetchall()
     conn.close()
     return result
 
@@ -376,10 +381,10 @@ def listar_logs(limite: int = 100) -> list:
 def limpar_logs(dias: int = 30):
     """Remove logs mais antigos que X dias."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         DELETE FROM log_atividades 
-        WHERE created_at < datetime('now', '-' || ? || ' days')
+        WHERE created_at < datetime('now', '-' || %s || ' days')
     """, (dias,))
     conn.commit()
     affected = cursor.rowcount
@@ -395,10 +400,10 @@ def registrar_historico(sku: str, campo: str, valor_antigo: str, valor_novo: str
     """Registra uma alteração no histórico do produto."""
     try:
         conn = get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         cursor.execute("""
             INSERT INTO historico_produto (sku, campo, valor_antigo, valor_novo, usuario, canal)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (sku, campo, str(valor_antigo) if valor_antigo else None, 
               str(valor_novo) if valor_novo else None, usuario, canal))
         conn.commit()
@@ -410,12 +415,12 @@ def registrar_historico(sku: str, campo: str, valor_antigo: str, valor_novo: str
 def listar_historico_produto(sku: str, limite: int = 50) -> list:
     """Lista histórico de alterações de um produto."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT id, sku, campo, valor_antigo, valor_novo, usuario, canal, created_at
-        FROM historico_produto WHERE sku = ? ORDER BY created_at DESC LIMIT ?
+        FROM historico_produto WHERE sku = %s ORDER BY created_at DESC LIMIT %s
     """, (sku, limite))
-    result = [dict(r) for r in cursor.fetchall()]
+    result = cursor.fetchall()
     conn.close()
     return result
 
@@ -423,12 +428,12 @@ def listar_historico_produto(sku: str, limite: int = 50) -> list:
 def listar_historico_geral(limite: int = 100) -> list:
     """Lista histórico geral de alterações."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT id, sku, campo, valor_antigo, valor_novo, usuario, canal, created_at
-        FROM historico_produto ORDER BY created_at DESC LIMIT ?
+        FROM historico_produto ORDER BY created_at DESC LIMIT %s
     """, (limite,))
-    result = [dict(r) for r in cursor.fetchall()]
+    result = cursor.fetchall()
     conn.close()
     return result
 
@@ -440,10 +445,10 @@ def listar_historico_geral(limite: int = 100) -> list:
 def criar_chamado(numero: str, prioridade: str, canal: str, observacoes: str, link: str, criado_por: str) -> int:
     """Cria um novo chamado."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         INSERT INTO chamados (numero, prioridade, canal, observacoes, link, criado_por)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """, (numero, prioridade, canal, observacoes, link, criado_por))
     conn.commit()
     chamado_id = cursor.lastrowid
@@ -452,13 +457,13 @@ def criar_chamado(numero: str, prioridade: str, canal: str, observacoes: str, li
 
 
 def listar_chamados(na_lixeira: bool = False) -> list:
-    """Lista chamados ativos ou na lixeira."""
+    """Lista chamados ativos ou na lixeira (exclui concluídos)."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT id, numero, prioridade, canal, observacoes, link, criado_por, na_lixeira, created_at
         FROM chamados
-        WHERE na_lixeira = ?
+        WHERE na_lixeira = %s AND (concluido = 0 OR concluido IS NULL)
         ORDER BY 
             CASE prioridade 
                 WHEN 'URGENTE' THEN 1 
@@ -468,7 +473,7 @@ def listar_chamados(na_lixeira: bool = False) -> list:
             END,
             created_at DESC
     """, (1 if na_lixeira else 0,))
-    result = [dict(r) for r in cursor.fetchall()]
+    result = cursor.fetchall()
     conn.close()
     return result
 
@@ -476,11 +481,11 @@ def listar_chamados(na_lixeira: bool = False) -> list:
 def atualizar_chamado(chamado_id: int, numero: str, prioridade: str, canal: str, observacoes: str, link: str) -> bool:
     """Atualiza um chamado existente."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         UPDATE chamados 
-        SET numero = ?, prioridade = ?, canal = ?, observacoes = ?, link = ?
-        WHERE id = ?
+        SET numero = %s, prioridade = %s, canal = %s, observacoes = %s, link = %s
+        WHERE id = %s
     """, (numero, prioridade, canal, observacoes, link, chamado_id))
     conn.commit()
     affected = cursor.rowcount
@@ -491,8 +496,8 @@ def atualizar_chamado(chamado_id: int, numero: str, prioridade: str, canal: str,
 def mover_para_lixeira(chamado_id: int) -> bool:
     """Move um chamado para a lixeira."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE chamados SET na_lixeira = 1 WHERE id = ?", (chamado_id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("UPDATE chamados SET na_lixeira = 1 WHERE id = %s", (chamado_id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -502,8 +507,8 @@ def mover_para_lixeira(chamado_id: int) -> bool:
 def restaurar_chamado(chamado_id: int) -> bool:
     """Restaura um chamado da lixeira."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE chamados SET na_lixeira = 0 WHERE id = ?", (chamado_id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("UPDATE chamados SET na_lixeira = 0 WHERE id = %s", (chamado_id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -513,12 +518,43 @@ def restaurar_chamado(chamado_id: int) -> bool:
 def excluir_chamado_permanente(chamado_id: int) -> bool:
     """Exclui permanentemente um chamado."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM chamados WHERE id = ?", (chamado_id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("DELETE FROM chamados WHERE id = %s", (chamado_id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
     return affected > 0
+
+
+def concluir_chamado(chamado_id: int, usuario: str) -> bool:
+    """Marca um chamado como concluído."""
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        UPDATE chamados 
+        SET concluido = 1, data_conclusao = %s, concluido_por = %s
+        WHERE id = %s
+    """, (datetime.now(), usuario, chamado_id))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def listar_chamados_concluidos() -> list:
+    """Lista chamados concluídos."""
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, numero, prioridade, canal, observacoes, link, criado_por, 
+               concluido, data_conclusao, concluido_por, created_at
+        FROM chamados
+        WHERE concluido = 1 AND na_lixeira = 0
+        ORDER BY data_conclusao DESC
+    """)
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
 
 # ============================================================
@@ -531,7 +567,7 @@ def inserir_produto(codigo_produto: str, sku: str = None, descricao: str = None,
                     **kwargs) -> int:
     """Insere um produto na tabela produtos_sinc. Retorna o ID do produto."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     # Extrair campos extras
     col_b = kwargs.get('col_b')
@@ -560,7 +596,7 @@ def inserir_produto(codigo_produto: str, sku: str = None, descricao: str = None,
                 col_b, col_c, col_i, col_k, col_l, col_m, col_n, col_o, col_p, col_q, col_r,
                 col_ab, col_ac, col_ae, col_af, col_ag, col_ao, col_ap
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             codigo_produto, sku, descricao, marca, gtin, categoria, preco, importado_por,
             col_b, col_c, col_i, col_k, col_l, col_m, col_n, col_o, col_p, col_q, col_r,
@@ -568,9 +604,9 @@ def inserir_produto(codigo_produto: str, sku: str = None, descricao: str = None,
         ))
         conn.commit()
         return cursor.lastrowid
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError:
         # Produto já existe, retorna ID existente
-        cursor.execute("SELECT id FROM produtos_sinc WHERE codigo_produto = ?", (codigo_produto,))
+        cursor.execute("SELECT id FROM produtos_sinc WHERE codigo_produto = %s", (codigo_produto,))
         row = cursor.fetchone()
         return row['id'] if row else None
     finally:
@@ -580,8 +616,8 @@ def inserir_produto(codigo_produto: str, sku: str = None, descricao: str = None,
 def buscar_produto_por_codigo(codigo_produto: str) -> Optional[Dict[str, Any]]:
     """Busca um produto pelo código."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM produtos_sinc WHERE codigo_produto = ?", (codigo_produto,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM produtos_sinc WHERE codigo_produto = %s", (codigo_produto,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -590,11 +626,11 @@ def buscar_produto_por_codigo(codigo_produto: str) -> Optional[Dict[str, Any]]:
 def listar_produtos(limite: int = 1000) -> List[Dict[str, Any]]:
     """Lista todos os produtos."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM produtos_sinc ORDER BY id DESC LIMIT ?", (limite,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM produtos_sinc ORDER BY id DESC LIMIT %s", (limite,))
     rows = cursor.fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return list(rows)
 
 
 # Função duplicada removida
@@ -609,11 +645,11 @@ def atualizar_produto_campo(produto_id: int, campo: str, valor: str):
         return False
     
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute(f"""
         UPDATE produtos_sinc 
-        SET {campo} = ?, updated_at = ?
-        WHERE id = ?
+        SET {campo} = %s, updated_at = %s
+        WHERE id = %s
     """, (valor, datetime.now(), produto_id))
     conn.commit()
     conn.close()
@@ -623,15 +659,106 @@ def atualizar_produto_campo(produto_id: int, campo: str, valor: str):
 def remover_produto_canal(produto_id: int, canal: str) -> bool:
     """Remove um produto de um canal específico."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         DELETE FROM produto_canal 
-        WHERE produto_id = ? AND canal = ?
+        WHERE produto_id = %s AND canal = %s
     """, (produto_id, canal.upper()))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
     return affected > 0
+
+
+def excluir_produto_canal(produto_id: int, canal: str, usuario: str = None) -> bool:
+    """
+    Exclui um produto de um canal marcando status como '-'.
+    Não remove a entrada, apenas marca como excluído do canal.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        UPDATE produto_canal 
+        SET status = '-', motivo_bloqueio = 'Removido manualmente', usuario_alteracao = %s, data_alteracao = NOW()
+        WHERE produto_id = %s AND canal = %s
+    """, (usuario, produto_id, canal.upper()))
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def adicionar_sku_canal(sku: str, canal: str, status: str = "", usuario: str = None,
+                         descricao: str = None, marca: str = None, gtin: str = None,
+                         categoria: str = None, preco: float = None) -> dict:
+    """
+    Adiciona um SKU a um canal. Se o produto não existir no banco, cria.
+    
+    Args:
+        sku: Código SKU do produto
+        canal: Nome do canal
+        status: Status inicial no canal
+        usuario: Usuário que está adicionando
+        descricao: Descrição do produto (opcional)
+        marca: Marca do produto (opcional)
+        gtin: GTIN/EAN do produto (opcional)
+        categoria: Categoria do produto (opcional)
+        preco: Preço do produto (opcional)
+    
+    Returns:
+        dict com 'produto_id', 'criado' (bool se foi criado novo), 'adicionado' (bool se foi adicionado ao canal)
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Verificar se produto existe
+    cursor.execute("SELECT id FROM produtos_sinc WHERE sku = %s OR codigo_produto = %s", (sku, sku))
+    row = cursor.fetchone()
+    
+    criado = False
+    if row:
+        produto_id = row['id']
+    else:
+        # Criar produto (sem data_criacao que não existe na tabela)
+        cursor.execute("""
+            INSERT INTO produtos_sinc (codigo_produto, sku, descricao, marca, gtin, categoria, preco, importado_por)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (sku, sku, descricao, marca, gtin, categoria, preco, usuario))
+        produto_id = cursor.lastrowid
+        criado = True
+    
+    # Verificar se já existe no canal
+    cursor.execute("""
+        SELECT id, status FROM produto_canal 
+        WHERE produto_id = %s AND canal = %s
+    """, (produto_id, canal.upper()))
+    canal_row = cursor.fetchone()
+    
+    adicionado = False
+    if canal_row:
+        # Já existe - atualizar status se diferente de '-'
+        if canal_row['status'] == '-':
+            cursor.execute("""
+                UPDATE produto_canal SET status = %s, motivo_bloqueio = NULL, usuario_alteracao = %s, data_alteracao = NOW()
+                WHERE id = %s
+            """, (status, usuario, canal_row['id']))
+            adicionado = True
+    else:
+        # Adicionar ao canal
+        cursor.execute("""
+            INSERT INTO produto_canal (produto_id, canal, status, bloqueado, usuario_alteracao)
+            VALUES (%s, %s, %s, 0, %s)
+        """, (produto_id, canal.upper(), status, usuario))
+        adicionado = True
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        'produto_id': produto_id,
+        'criado': criado,
+        'adicionado': adicionado
+    }
 
 
 # ============================================================
@@ -641,16 +768,16 @@ def remover_produto_canal(produto_id: int, canal: str) -> bool:
 def registrar_produto_blocklist(produto_id: int, canal: str, termo_bloqueado: str = None) -> bool:
     """Registra um produto como bloqueado para um canal específico (não insere em produto_canal)."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
         cursor.execute("""
             INSERT INTO produto_blocklist (produto_id, canal, termo_bloqueado)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (produto_id, canal.upper(), termo_bloqueado))
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError:
         return False
     finally:
         conn.close()
@@ -659,9 +786,9 @@ def registrar_produto_blocklist(produto_id: int, canal: str, termo_bloqueado: st
 def listar_produtos_bloqueados(produto_id: int) -> Dict[str, str]:
     """Retorna um dicionário {canal: termo_bloqueado} dos canais bloqueados para um produto."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT canal, termo_bloqueado FROM produto_blocklist WHERE produto_id = ?
+        SELECT canal, termo_bloqueado FROM produto_blocklist WHERE produto_id = %s
     """, (produto_id,))
     results = {row['canal']: row['termo_bloqueado'] for row in cursor.fetchall()}
     conn.close()
@@ -678,16 +805,16 @@ def adicionar_produto_canal(produto_id: int, canal: str, status: str = "",
                             usuario: str = None) -> bool:
     """Adiciona um produto a um canal."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
         cursor.execute("""
             INSERT INTO produto_canal (produto_id, canal, status, bloqueado, motivo_bloqueio, usuario_alteracao)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (produto_id, canal.upper(), status, 1 if bloqueado else 0, motivo_bloqueio, usuario))
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError:
         # Já existe
         return False
     finally:
@@ -697,17 +824,17 @@ def adicionar_produto_canal(produto_id: int, canal: str, status: str = "",
 def atualizar_importacao_externa(produto_id: int, canal: str, omnie: bool = None, anymarket: bool = None):
     """Atualiza checkboxes de importação externa (Omnie One / AnyMarket)."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     updates = []
     params = []
     
     if omnie is not None:
-        updates.append("importado_omnie = ?")
+        updates.append("importado_omnie = %s")
         params.append(1 if omnie else 0)
     
     if anymarket is not None:
-        updates.append("importado_anymarket = ?")
+        updates.append("importado_anymarket = %s")
         params.append(1 if anymarket else 0)
     
     if updates:
@@ -715,7 +842,7 @@ def atualizar_importacao_externa(produto_id: int, canal: str, omnie: bool = None
         cursor.execute(f"""
             UPDATE produto_canal 
             SET {', '.join(updates)}, data_alteracao = CURRENT_TIMESTAMP
-            WHERE produto_id = ? AND canal = ?
+            WHERE produto_id = %s AND canal = %s
         """, params)
         conn.commit()
     
@@ -728,7 +855,7 @@ def marcar_importacao_externa_em_massa(produto_ids: List[int], campo: str, valor
     campo: 'omnie' ou 'anymarket'
     """
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     coluna = 'importado_omnie' if campo == 'omnie' else 'importado_anymarket'
     val_int = 1 if valor else 0
@@ -744,13 +871,13 @@ def marcar_importacao_externa_em_massa(produto_ids: List[int], campo: str, valor
     try:
         for i in range(0, len(produto_ids), BATCH_SIZE):
             batch = produto_ids[i:i+BATCH_SIZE]
-            placeholders = ','.join(['?'] * len(batch))
+            placeholders = ','.join(['%s'] * len(batch))
             
             cursor.execute(f"""
                 UPDATE produto_canal 
-                SET {coluna} = ?, data_alteracao = CURRENT_TIMESTAMP
+                SET {coluna} = %s, data_alteracao = CURRENT_TIMESTAMP
                 WHERE produto_id IN ({placeholders})
-            """, [val_int] + batch)
+            """, tuple([val_int] + list(batch)))
             
             total_afetados += cursor.rowcount
             
@@ -767,18 +894,18 @@ def marcar_importacao_externa_em_massa(produto_ids: List[int], campo: str, valor
 def atualizar_status_produto_canal(produto_id: int, canal: str, novo_status: str, usuario: str = None):
     """Atualiza o status de um produto em um canal."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         UPDATE produto_canal 
-        SET status = ?, usuario_alteracao = ?, data_alteracao = ?
-    WHERE produto_id = ? AND canal = ?
+        SET status = %s, usuario_alteracao = %s, data_alteracao = %s
+    WHERE produto_id = %s AND canal = %s
     """, (novo_status, usuario, datetime.now(), produto_id, canal.upper()))
     
     # Se o novo status não é blocklist, remove da tabela produto_blocklist
     if novo_status and novo_status.upper() != 'BLOCKLIST':
         cursor.execute("""
             DELETE FROM produto_blocklist 
-            WHERE produto_id = ? AND canal = ?
+            WHERE produto_id = %s AND canal = %s
         """, (produto_id, canal.upper()))
     
     conn.commit()
@@ -791,7 +918,7 @@ def atualizar_status_em_massa(canal: str, atualizacoes: Dict[str, str], usuario:
     atualizacoes: dict {sku: novo_status}
     """
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     count = 0
     now = datetime.now()
@@ -806,13 +933,13 @@ def atualizar_status_em_massa(canal: str, atualizacoes: Dict[str, str], usuario:
         
         for i in range(0, len(skus), BATCH_SIZE):
             batch = skus[i:i + BATCH_SIZE]
-            placeholders = ','.join(['?'] * len(batch))
+            placeholders = ','.join(['%s'] * len(batch))
             
             # Buscar por SKU ou codigo_produto
             cursor.execute(f"""
                 SELECT id, sku, codigo_produto FROM produtos_sinc 
                 WHERE sku IN ({placeholders}) OR codigo_produto IN ({placeholders})
-            """, batch + batch)
+            """, tuple(batch + batch))
             
             for row in cursor.fetchall():
                 if row['sku']: mapa_sku_id[row['sku']] = row['id']
@@ -831,8 +958,8 @@ def atualizar_status_em_massa(canal: str, atualizacoes: Dict[str, str], usuario:
         if updates_data:
             cursor.executemany("""
                 UPDATE produto_canal 
-                SET status = ?, usuario_alteracao = ?, data_alteracao = CURRENT_TIMESTAMP
-                WHERE produto_id = ? AND canal = ?
+                SET status = %s, usuario_alteracao = %s, data_alteracao = CURRENT_TIMESTAMP
+                WHERE produto_id = %s AND canal = %s
             """, updates_data)
             count = cursor.rowcount
             conn.commit()
@@ -852,18 +979,18 @@ def atualizar_status_em_massa(canal: str, atualizacoes: Dict[str, str], usuario:
 def atualizar_status_produto_canal_com_erro(produto_id: int, canal: str, novo_status: str, motivo_erro: str, usuario: str = None):
     """Atualiza o status de um produto em um canal com motivo de erro."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         UPDATE produto_canal 
-        SET status = ?, motivo_bloqueio = ?, usuario_alteracao = ?, data_alteracao = ?
-        WHERE produto_id = ? AND canal = ?
+        SET status = %s, motivo_bloqueio = %s, usuario_alteracao = %s, data_alteracao = %s
+        WHERE produto_id = %s AND canal = %s
     """, (novo_status, motivo_erro, usuario, datetime.now(), produto_id, canal.upper()))
     
     # Se o novo status não é blocklist, remove da tabela produto_blocklist
     if novo_status and novo_status.upper() != 'BLOCKLIST':
         cursor.execute("""
             DELETE FROM produto_blocklist 
-            WHERE produto_id = ? AND canal = ?
+            WHERE produto_id = %s AND canal = %s
         """, (produto_id, canal.upper()))
     
     conn.commit()
@@ -876,7 +1003,7 @@ def atualizar_status_em_massa_com_erro(canal: str, atualizacoes: Dict[str, Tuple
     atualizacoes: dict {sku: (novo_status, motivo_erro)}
     """
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     count = 0
     
@@ -890,19 +1017,19 @@ def atualizar_status_em_massa_com_erro(canal: str, atualizacoes: Dict[str, Tuple
         
         for i in range(0, len(skus), BATCH_SIZE):
             batch = skus[i:i + BATCH_SIZE]
-            placeholders = ','.join(['?'] * len(batch))
+            placeholders = ','.join(['%s'] * len(batch))
             
             # Buscar por SKU ou codigo_produto
             cursor.execute(f"""
                 SELECT id, sku, codigo_produto FROM produtos_sinc 
                 WHERE sku IN ({placeholders}) OR codigo_produto IN ({placeholders})
-            """, batch + batch)
+            """, tuple(batch + batch))
             
             for row in cursor.fetchall():
                 if row['sku']: mapa_sku_id[row['sku']] = row['id']
                 if row['codigo_produto']: mapa_sku_id[row['codigo_produto']] = row['id']
         
-        print(f"[Netshoes] SKUs encontrados no banco: {len(mapa_sku_id)} de {len(skus)}")
+        print(f"[{canal}] SKUs encontrados no banco: {len(mapa_sku_id)} de {len(skus)}")
         
         # Atualizar cada produto (suporta tupla de 2 ou 3 elementos)
         for sku, dados in atualizacoes.items():
@@ -916,15 +1043,15 @@ def atualizar_status_em_massa_com_erro(canal: str, atualizacoes: Dict[str, Tuple
                 pid = mapa_sku_id[sku]
                 
                 # Montar query dinâmica
-                campos = ["status = ?", "usuario_alteracao = ?", "data_alteracao = CURRENT_TIMESTAMP"]
+                campos = ["status = %s", "usuario_alteracao = %s", "data_alteracao = CURRENT_TIMESTAMP"]
                 params = [status, usuario]
                 
                 if motivo:
-                    campos.append("motivo_bloqueio = ?")
+                    campos.append("motivo_bloqueio = %s")
                     params.append(motivo)
                 
                 if cod_mp:
-                    campos.append("cod_marketplace = ?")
+                    campos.append("cod_marketplace = %s")
                     params.append(cod_mp)
                 
                 params.append(pid)
@@ -933,7 +1060,7 @@ def atualizar_status_em_massa_com_erro(canal: str, atualizacoes: Dict[str, Tuple
                 cursor.execute(f"""
                     UPDATE produto_canal 
                     SET {', '.join(campos)}
-                    WHERE produto_id = ? AND canal = ?
+                    WHERE produto_id = %s AND canal = %s
                 """, params)
                 
                 count += cursor.rowcount
@@ -955,7 +1082,7 @@ def atualizar_status_em_massa_com_erro(canal: str, atualizacoes: Dict[str, Tuple
 def listar_produtos_canal(canal: str, status: str = None) -> List[Dict[str, Any]]:
     """Lista produtos de um canal específico."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     query = """
         SELECT p.*, pc.canal, pc.status, pc.bloqueado, pc.motivo_bloqueio, pc.data_alteracao, pc.cod_marketplace,
@@ -963,12 +1090,12 @@ def listar_produtos_canal(canal: str, status: str = None) -> List[Dict[str, Any]
                p.col_ab, p.col_ac, p.col_ae, p.col_af, p.col_ag, p.col_ao, p.col_ap
         FROM produtos_sinc p
         JOIN produto_canal pc ON p.id = pc.produto_id
-        WHERE pc.canal = ?
+        WHERE pc.canal = %s
     """
     params = [canal.upper()]
     
     if status:
-        query += " AND pc.status = ?"
+        query += " AND pc.status = %s"
         params.append(status)
     
     query += " ORDER BY p.id DESC"
@@ -976,17 +1103,17 @@ def listar_produtos_canal(canal: str, status: str = None) -> List[Dict[str, Any]
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return list(rows)
 
 
 def contar_produtos_por_status_canal(canal: str) -> Dict[str, int]:
     """Conta produtos por status em um canal."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT status, COUNT(*) as qtd
         FROM produto_canal
-        WHERE canal = ?
+        WHERE canal = %s
         GROUP BY status
     """, (canal.upper(),))
     rows = cursor.fetchall()
@@ -1009,16 +1136,16 @@ def contar_total_por_canal() -> Dict[str, Dict[str, int]]:
 def adicionar_blocklist(canal: str, termo: str, tipo: str = "PALAVRA") -> bool:
     """Adiciona um termo à blocklist de um canal."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
         cursor.execute("""
             INSERT INTO blocklist (canal, termo_bloqueio, tipo)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (canal.upper(), termo, tipo))
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError:
         return False
     finally:
         conn.close()
@@ -1027,16 +1154,16 @@ def adicionar_blocklist(canal: str, termo: str, tipo: str = "PALAVRA") -> bool:
 def listar_blocklist(canal: str = None) -> List[Dict[str, Any]]:
     """Lista itens da blocklist."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     if canal:
-        cursor.execute("SELECT * FROM blocklist WHERE canal = ? ORDER BY termo_bloqueio", (canal.upper(),))
+        cursor.execute("SELECT * FROM blocklist WHERE canal = %s ORDER BY termo_bloqueio", (canal.upper(),))
     else:
         cursor.execute("SELECT * FROM blocklist ORDER BY canal, termo_bloqueio")
     
     rows = cursor.fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return list(rows)
 
 
 def verificar_blocklist(canal: str, nome_produto: str, marca: str = None) -> Tuple[bool, Optional[str]]:
@@ -1082,8 +1209,8 @@ def verificar_blocklist(canal: str, nome_produto: str, marca: str = None) -> Tup
 def remover_blocklist(id: int) -> bool:
     """Remove um item da blocklist."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM blocklist WHERE id = ?", (id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("DELETE FROM blocklist WHERE id = %s", (id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -1096,7 +1223,7 @@ def limpar_blocklist_falsos_positivos() -> Dict[str, int]:
     termos atuais da blocklist. Retorna estatísticas da limpeza.
     """
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     # Buscar todos os produtos bloqueados com seus dados
     cursor.execute("""
@@ -1132,9 +1259,9 @@ def limpar_blocklist_falsos_positivos() -> Dict[str, int]:
     # Remover em lote
     if ids_para_remover:
         conn = get_connection()
-        cursor = conn.cursor()
-        placeholders = ','.join('?' * len(ids_para_remover))
-        cursor.execute(f"DELETE FROM produto_blocklist WHERE id IN ({placeholders})", ids_para_remover)
+        cursor = conn.cursor(dictionary=True)
+        placeholders = ','.join(['%s'] * len(ids_para_remover))
+        cursor.execute(f"DELETE FROM produto_blocklist WHERE id IN ({placeholders})", tuple(ids_para_remover))
         conn.commit()
         conn.close()
     
@@ -1152,10 +1279,10 @@ def limpar_blocklist_falsos_positivos() -> Dict[str, int]:
 def registrar_importacao(arquivo: str, tipo_modelo: str, qtd_produtos: int, usuario: str = None) -> int:
     """Registra uma importação de planilha."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         INSERT INTO importacoes (arquivo, tipo_modelo, qtd_produtos, usuario)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (arquivo, tipo_modelo, qtd_produtos, usuario))
     conn.commit()
     last_id = cursor.lastrowid
@@ -1166,13 +1293,13 @@ def registrar_importacao(arquivo: str, tipo_modelo: str, qtd_produtos: int, usua
 def listar_importacoes(limite: int = 50) -> List[Dict[str, Any]]:
     """Lista as últimas importações."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT * FROM importacoes ORDER BY data_importacao DESC LIMIT ?
+        SELECT * FROM importacoes ORDER BY data_importacao DESC LIMIT %s
     """, (limite,))
     rows = cursor.fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return list(rows)
 
 
 # ============================================================
@@ -1183,10 +1310,10 @@ def salvar_lista_preco(caminho_planilha: str, nome_planilha: str, qtd_produtos: 
                        importacao_id: int = None, usuario: str = None) -> int:
     """Registra uma lista de preço disponível para download (sem gerar CSV ainda)."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         INSERT INTO lista_precos (importacao_id, caminho_planilha, nome_planilha, qtd_produtos, usuario)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (importacao_id, caminho_planilha, nome_planilha, qtd_produtos, usuario))
     conn.commit()
     last_id = cursor.lastrowid
@@ -1194,15 +1321,15 @@ def salvar_lista_preco(caminho_planilha: str, nome_planilha: str, qtd_produtos: 
     return last_id
 
 
-def atualizar_lista_preco_baixada(id: int, data_inicio: str, data_fim: str, caminho_csv: str):
+def atualizar_lista_preco_baixada(id: int, data_inicio: str, data_fim: str, caminho_csv: str, baixado_por: str = None):
     """Marca uma lista de preço como baixada e salva o caminho do CSV."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         UPDATE lista_precos 
-        SET data_inicio_vigencia = ?, data_fim_vigencia = ?, caminho_csv = ?, baixado = 1
-        WHERE id = ?
-    """, (data_inicio, data_fim, caminho_csv, id))
+        SET data_inicio_vigencia = %s, data_fim_vigencia = %s, caminho_csv = %s, baixado = 1, baixado_por = %s
+        WHERE id = %s
+    """, (data_inicio, data_fim, caminho_csv, baixado_por, id))
     conn.commit()
     conn.close()
 
@@ -1210,20 +1337,20 @@ def atualizar_lista_preco_baixada(id: int, data_inicio: str, data_fim: str, cami
 def listar_listas_preco(limite: int = 50) -> List[Dict[str, Any]]:
     """Lista as listas de preço disponíveis."""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT * FROM lista_precos ORDER BY data_geracao DESC LIMIT ?
+        SELECT * FROM lista_precos ORDER BY data_geracao DESC LIMIT %s
     """, (limite,))
     rows = cursor.fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return list(rows)
 
 
 def buscar_lista_preco(id: int) -> Optional[Dict[str, Any]]:
     """Busca uma lista de preço pelo ID."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM lista_precos WHERE id = ?", (id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM lista_precos WHERE id = %s", (id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -1232,8 +1359,8 @@ def buscar_lista_preco(id: int) -> Optional[Dict[str, Any]]:
 def remover_lista_preco(id: int) -> bool:
     """Remove uma lista de preço."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM lista_precos WHERE id = ?", (id,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("DELETE FROM lista_precos WHERE id = %s", (id,))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -1247,8 +1374,8 @@ def remover_lista_preco(id: int) -> bool:
 def verificar_usuario(username: str, senha: str) -> Tuple[bool, str, Optional[Dict]]:
     """Verifica credenciais do usuário."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM usuarios WHERE username = ? AND ativo = 1", (username,))
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM usuarios WHERE username = %s AND ativo = 1", (username,))
     row = cursor.fetchone()
     conn.close()
     

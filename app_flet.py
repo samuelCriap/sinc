@@ -10,11 +10,11 @@ import sys
 import threading
 from utils import resource_path
 from services.database_sinc import (
-    create_tables, criar_usuario_inicial, verificar_usuario, set_db_path,
+    create_tables, criar_usuario_inicial, verificar_usuario,
     cadastrar_usuario, listar_usuarios_pendentes, listar_todos_usuarios,
     aprovar_usuario, rejeitar_usuario, alterar_cargo_usuario, registrar_log
 )
-from services.config_rede import get_config, save_config, get_db_path, test_connection, config_exists
+from services.config_rede import get_config, save_config, test_connection, config_exists
 from services.backup import executar_backup_automatico
 from services.usuarios_online import (
     registrar_usuario_online, listar_usuarios_online, 
@@ -360,11 +360,7 @@ def main(page: ft.Page):
                     page.update()
                     return
                 
-                # Primeiro conecta ao servidor
-                ip = servidor.value.strip() or "localhost"
-                db_path = get_db_path(ip)
-                set_db_path(db_path)
-                
+                # Conectar ao MySQL e criar tabelas se necessário
                 try:
                     create_tables()
                 except:
